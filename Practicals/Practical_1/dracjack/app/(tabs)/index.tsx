@@ -1,20 +1,46 @@
-import React, { useMemo, useCallback, useState } from "react";
+import React, { useMemo, useCallback, useState, useEffect } from "react";
 import { View, Text, Image, StyleSheet, TouchableOpacity, SafeAreaView, StatusBar, Modal } from "react-native";
 import { useRouter } from "expo-router";
 import Swiper from "react-native-swiper";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+// Language constants
+export const LANGUAGE_STORAGE_KEY = "SELECTED_LANGUAGE";
+
+export interface Language {
+  name: string;
+  code: string;
+  emoji: string;
+}
+
+export const AVAILABLE_LANGUAGES: Language[] = [
+  { name: "English", code: "en", emoji: "🇬🇧" },
+  { name: "Bahasa Indonesia", code: "id", emoji: "🇮🇩" },
+  { name: "Tiếng Việt", code: "vi", emoji: "🇻🇳" },
+];
 
 const OnboardingScreen = () => {
   const router = useRouter();
   const [currentPage, setCurrentPage] = useState(0);
   const [languageModalVisible, setLanguageModalVisible] = useState(false);
-  const [selectedLanguage, setSelectedLanguage] = useState("English");
+  const [selectedLanguage, setSelectedLanguage] = useState<Language>(AVAILABLE_LANGUAGES[0]);
 
-  // Available languages
-  const languages = [
-    { name: "English", selected: selectedLanguage === "English" },
-    { name: "Bahasa Indonesia", selected: selectedLanguage === "Bahasa Indonesia" },
-    { name: "Tiếng Việt", selected: selectedLanguage === "Tiếng Việt" },
-  ];
+  // Load saved language on component mount
+  useEffect(() => {
+    const loadLanguagePreference = async () => {
+      try {
+        const savedLanguage = await AsyncStorage.getItem(LANGUAGE_STORAGE_KEY);
+        if (savedLanguage) {
+          const langObj = JSON.parse(savedLanguage);
+          setSelectedLanguage(langObj);
+        }
+      } catch (error) {
+        console.error("Error loading language preference:", error);
+      }
+    };
+
+    loadLanguagePreference();
+  }, []);
 
   // Content for each slide
   const slides = useMemo(() => [
@@ -49,7 +75,7 @@ const OnboardingScreen = () => {
     router.push("/design");
   }, [router]);
 
-  const handleSwiperIndexChanged = useCallback((index: React.SetStateAction<number>) => {
+  const handleSwiperIndexChanged = useCallback((index) => {
     setCurrentPage(index);
   }, []);
 
@@ -57,9 +83,16 @@ const OnboardingScreen = () => {
     setLanguageModalVisible(!languageModalVisible);
   }, [languageModalVisible]);
 
-  const selectLanguage = useCallback((language) => {
+  const selectLanguage = useCallback(async (language: Language) => {
     setSelectedLanguage(language);
     setLanguageModalVisible(false);
+    
+    // Save selected language to AsyncStorage
+    try {
+      await AsyncStorage.setItem(LANGUAGE_STORAGE_KEY, JSON.stringify(language));
+    } catch (error) {
+      console.error("Error saving language preference:", error);
+    }
   }, []);
 
   // Memoize the slide rendering function
@@ -81,7 +114,7 @@ const OnboardingScreen = () => {
         
         {/* Language Selection Button */}
         <TouchableOpacity style={styles.languageButton} onPress={toggleLanguageModal}>
-          <Text style={styles.languageText}>文 {selectedLanguage}</Text>
+          <Text style={styles.languageText}>{selectedLanguage.emoji} {selectedLanguage.name}</Text>
         </TouchableOpacity>
       </View>
       
@@ -149,19 +182,18 @@ const OnboardingScreen = () => {
               <Text style={styles.modalTitle}>Change language</Text>
               <Text style={styles.modalSubtitle}>Which language do you prefer?</Text>
               
-              {languages.map((language, index) => (
+              {AVAILABLE_LANGUAGES.map((language, index) => (
                 <TouchableOpacity 
                   key={index} 
                   style={styles.languageOption}
-                  onPress={() => selectLanguage(language.name)}
+                  onPress={() => selectLanguage(language)}
                 >
-                  <Text style={styles.languageOptionText}>{language.name}</Text>
-                  {language.selected && (
+                  <Text style={styles.languageOptionText}>{language.emoji} {language.name}</Text>
+                  {selectedLanguage.code === language.code ? (
                     <View style={styles.radioSelected}>
                       <View style={styles.radioInner} />
                     </View>
-                  )}
-                  {!language.selected && (
+                  ) : (
                     <View style={styles.radioUnselected} />
                   )}
                 </TouchableOpacity>
@@ -171,7 +203,7 @@ const OnboardingScreen = () => {
                 style={styles.continueLanguageButton}
                 onPress={toggleLanguageModal}
               >
-                <Text style={styles.continueLanguageText}>Continue in {selectedLanguage}</Text>
+                <Text style={styles.continueLanguageText}>Continue in {selectedLanguage.name}</Text>
               </TouchableOpacity>
             </View>
           </View>

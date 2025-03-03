@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import { 
   View, 
   Text, 
@@ -7,10 +7,13 @@ import {
   TouchableOpacity, 
   SafeAreaView, 
   StatusBar,
-  Image
+  Image,
+  Modal
 } from "react-native";
 import { useRouter } from "expo-router";
 import CountryCodeSelector from "../../components/country"; // Adjust path as needed
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { LANGUAGE_STORAGE_KEY, AVAILABLE_LANGUAGES, Language } from "./index"; // Import the language constants
 
 const PhoneNumberScreen = () => {
   const router = useRouter();
@@ -20,6 +23,25 @@ const PhoneNumberScreen = () => {
     code: "+62",
     flag: "🇮🇩"
   });
+  const [languageModalVisible, setLanguageModalVisible] = useState(false);
+  const [selectedLanguage, setSelectedLanguage] = useState<Language>(AVAILABLE_LANGUAGES[0]);
+  
+  // Load the saved language on component mount
+  useEffect(() => {
+    const loadLanguagePreference = async () => {
+      try {
+        const savedLanguage = await AsyncStorage.getItem(LANGUAGE_STORAGE_KEY);
+        if (savedLanguage) {
+          const langObj = JSON.parse(savedLanguage);
+          setSelectedLanguage(langObj);
+        }
+      } catch (error) {
+        console.error("Error loading language preference:", error);
+      }
+    };
+
+    loadLanguagePreference();
+  }, []);
   
   const handleGoBack = useCallback(() => {
     router.back();
@@ -48,6 +70,22 @@ const PhoneNumberScreen = () => {
     setSelectedCountry(country);
   }, []);
 
+  const toggleLanguageModal = useCallback(() => {
+    setLanguageModalVisible(!languageModalVisible);
+  }, [languageModalVisible]);
+
+  const selectLanguage = useCallback(async (language: Language) => {
+    setSelectedLanguage(language);
+    setLanguageModalVisible(false);
+    
+    // Save selected language to AsyncStorage
+    try {
+      await AsyncStorage.setItem(LANGUAGE_STORAGE_KEY, JSON.stringify(language));
+    } catch (error) {
+      console.error("Error saving language preference:", error);
+    }
+  }, []);
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#fff" />
@@ -62,8 +100,8 @@ const PhoneNumberScreen = () => {
           <Text style={styles.helpIcon}>?</Text>
         </TouchableOpacity>
         
-        <TouchableOpacity style={styles.languageButton}>
-          <Text style={styles.languageText}>文 English</Text>
+        <TouchableOpacity style={styles.languageButton} onPress={toggleLanguageModal}>
+          <Text style={styles.languageText}>{selectedLanguage.emoji} {selectedLanguage.name}</Text>
         </TouchableOpacity>
       </View>
       
@@ -126,11 +164,57 @@ const PhoneNumberScreen = () => {
           resizeMode="contain"
         />
       </View>
+
+      {/* Language Selection Modal - Shared between screens */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={languageModalVisible}
+        onRequestClose={toggleLanguageModal}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <TouchableOpacity onPress={toggleLanguageModal} style={styles.closeButton}>
+                <Text style={styles.closeButtonText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.modalBody}>
+              <Text style={styles.modalTitle}>Change language</Text>
+              <Text style={styles.modalSubtitle}>Which language do you prefer?</Text>
+              
+              {AVAILABLE_LANGUAGES.map((language, index) => (
+                <TouchableOpacity 
+                  key={index} 
+                  style={styles.languageOption}
+                  onPress={() => selectLanguage(language)}
+                >
+                  <Text style={styles.languageOptionText}>{language.emoji} {language.name}</Text>
+                  {selectedLanguage.code === language.code ? (
+                    <View style={styles.radioSelected}>
+                      <View style={styles.radioInner} />
+                    </View>
+                  ) : (
+                    <View style={styles.radioUnselected} />
+                  )}
+                </TouchableOpacity>
+              ))}
+              
+              <TouchableOpacity 
+                style={styles.continueLanguageButton}
+                onPress={toggleLanguageModal}
+              >
+                <Text style={styles.continueLanguageText}>Continue in {selectedLanguage.name}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
 
-// Keep the original styles (unchanged)
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -267,6 +351,92 @@ const styles = StyleSheet.create({
   gotoLogo: {
     width: 80,
     height: 24,
+  },
+  // Modal Styles - Using same styles from OnboardingScreen
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 30,
+  },
+  modalHeader: {
+    alignItems: 'flex-end',
+    padding: 15,
+  },
+  closeButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#ffffff",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  closeButtonText: {
+    fontSize: 18,
+    color: "#333",
+  },
+  modalBody: {
+    padding: 20,
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 10,
+  },
+  modalSubtitle: {
+    fontSize: 16,
+    color: '#666',
+    marginBottom: 30,
+  },
+  languageOption: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  languageOptionText: {
+    fontSize: 16,
+  },
+  radioSelected: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#00AA13',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  radioInner: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#00AA13',
+  },
+  radioUnselected: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#ccc',
+  },
+  continueLanguageButton: {
+    backgroundColor: "#00AA13",
+    borderRadius: 30,
+    padding: 16,
+    alignItems: "center",
+    marginTop: 40,
+  },
+  continueLanguageText: {
+    color: "#FFFFFF",
+    fontSize: 18,
+    fontWeight: "bold",
   },
 });
 
