@@ -227,8 +227,8 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
   },
   logo: {
-    width: 120,
-    height: 30,
+    width: 150,
+    height: 50,
     resizeMode: "contain",
   },
   languageButton: {

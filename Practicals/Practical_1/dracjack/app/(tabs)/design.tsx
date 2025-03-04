@@ -11,7 +11,7 @@ import {
   Modal
 } from "react-native";
 import { useRouter } from "expo-router";
-import CountryCodeSelector from "../../components/country"; // Adjust path as needed
+import InternationalCodeSelector from "../../components/country"; // Adjust path as needed
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LANGUAGE_STORAGE_KEY, AVAILABLE_LANGUAGES, Language } from "./index"; // Import the language constants
 
@@ -117,7 +117,7 @@ const PhoneNumberScreen = () => {
           </Text>
           
           <View style={styles.phoneInputContainer}>
-            <CountryCodeSelector
+            <InternationalCodeSelector
               selectedCountry={selectedCountry}
               onSelectCountry={handleSelectCountry}
             />

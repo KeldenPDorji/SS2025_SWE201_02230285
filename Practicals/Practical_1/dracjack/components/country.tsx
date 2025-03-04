@@ -9,13 +9,14 @@ import {
   Modal,
   SafeAreaView,
   StatusBar,
+  SectionList,
 } from "react-native";
 
-const CountryCodeSelector = ({ selectedCountry, onSelectCountry }) => {
+const InternationalCodeSelector = ({ selectedCountry, onSelectCountry }) => {
   const [modalVisible, setModalVisible] = useState(false);
   const [searchText, setSearchText] = useState("");
-  const [filteredCountries, setFilteredCountries] = useState([]);
   const [countries, setCountries] = useState([]);
+  const [sections, setSections] = useState([]);
 
   // Fetch countries from RestCountries API
   useEffect(() => {
@@ -31,7 +32,7 @@ const CountryCodeSelector = ({ selectedCountry, onSelectCountry }) => {
 
           // Remove the extra '+' by checking if root already starts with '+'
           const cleanedRoot = root.startsWith("+") ? root.slice(1) : root;
-          const code = suffixes.length > 5 ? `+${cleanedRoot}` : `+${cleanedRoot}${suffixes.join("")}`;
+          const code = suffixes.length > 0 ? `+${cleanedRoot}${suffixes[0]}` : `+${cleanedRoot}`;
 
           return {
             name: country.name.common,
@@ -40,8 +41,15 @@ const CountryCodeSelector = ({ selectedCountry, onSelectCountry }) => {
           };
         });
 
-        setCountries(formattedCountries);
-        setFilteredCountries(formattedCountries);
+        // Sort countries alphabetically by name
+        const sortedCountries = formattedCountries.sort((a, b) => 
+          a.name.localeCompare(b.name)
+        );
+
+        setCountries(sortedCountries);
+
+        // Create initial sections for the list
+        updateSections(sortedCountries, "");
       } catch (error) {
         console.error("Error fetching countries:", error);
       }
@@ -50,23 +58,42 @@ const CountryCodeSelector = ({ selectedCountry, onSelectCountry }) => {
     fetchCountries();
   }, []);
 
+  // Update sections based on search text
+  const updateSections = useCallback((allCountries, query) => {
+    if (!query) {
+      // Define popular countries (could be based on usage statistics or preferences)
+      // For this example, we'll use a predefined list of popular country codes
+      const popularCountryCodes = ["+1", "+44", "+61", "+62"]; // US, UK, Australia, Indonesia
+      
+      // Get popular countries from the full list
+      const popularCountries = allCountries
+        .filter(country => popularCountryCodes.includes(country.code))
+        .sort((a, b) => a.name.localeCompare(b.name));
+      
+      // Set up sections with both popular and all countries
+      setSections([
+        { title: "Popular countries", data: popularCountries },
+        { title: "All countries", data: allCountries }
+      ]);
+    } else {
+      // When searching, just show filtered results without sections
+      const filtered = allCountries.filter(
+        (country) =>
+          country.name.toLowerCase().includes(query.toLowerCase()) ||
+          country.code.includes(query)
+      );
+      setSections([{ title: "", data: filtered }]);
+    }
+  }, []);
+
   // Debounce search input
   useEffect(() => {
     const debounceTimeout = setTimeout(() => {
-      if (searchText) {
-        const filtered = countries.filter(
-          (country) =>
-            country.name.toLowerCase().includes(searchText.toLowerCase()) ||
-            country.code.includes(searchText)
-        );
-        setFilteredCountries(filtered);
-      } else {
-        setFilteredCountries(countries);
-      }
+      updateSections(countries, searchText);
     }, 300); // 300ms delay
 
     return () => clearTimeout(debounceTimeout);
-  }, [searchText, countries]);
+  }, [searchText, countries, updateSections]);
 
   const openModal = useCallback(() => {
     setModalVisible(true);
@@ -75,7 +102,9 @@ const CountryCodeSelector = ({ selectedCountry, onSelectCountry }) => {
   const closeModal = useCallback(() => {
     setModalVisible(false);
     setSearchText("");
-  }, []);
+    // Reset sections when closing modal
+    updateSections(countries, "");
+  }, [countries, updateSections]);
 
   const handleSelectCountry = useCallback(
     (country) => {
@@ -85,28 +114,17 @@ const CountryCodeSelector = ({ selectedCountry, onSelectCountry }) => {
     [onSelectCountry, closeModal]
   );
 
-  const renderPopularSection = () => {
-    const popularCountries = filteredCountries.slice(0, 3); // First 3 countries as popular
-
+  const renderSectionHeader = useCallback(({ section }) => {
+    if (!section.title || searchText) return null;
+    
     return (
-      <View style={styles.sectionContainer}>
-        <Text style={styles.sectionTitle}>Popular countries</Text>
-        {popularCountries.map((country) => (
-          <TouchableOpacity
-            key={`${country.name}-${country.code}`}
-            style={styles.countryItem}
-            onPress={() => handleSelectCountry(country)}
-          >
-            <Text style={styles.flagEmoji}>{country.flag}</Text>
-            <Text style={styles.countryName}>{country.name}</Text>
-            <Text style={styles.countryCode}>{country.code}</Text>
-          </TouchableOpacity>
-        ))}
+      <View style={styles.sectionHeaderContainer}>
+        <Text style={styles.sectionTitle}>{section.title}</Text>
       </View>
     );
-  };
+  }, [searchText]);
 
-  const renderItem = ({ item }) => (
+  const renderItem = useCallback(({ item }) => (
     <TouchableOpacity
       style={styles.countryItem}
       onPress={() => handleSelectCountry(item)}
@@ -115,7 +133,7 @@ const CountryCodeSelector = ({ selectedCountry, onSelectCountry }) => {
       <Text style={styles.countryName}>{item.name}</Text>
       <Text style={styles.countryCode}>{item.code}</Text>
     </TouchableOpacity>
-  );
+  ), [handleSelectCountry]);
 
   return (
     <>
@@ -149,20 +167,17 @@ const CountryCodeSelector = ({ selectedCountry, onSelectCountry }) => {
                 placeholderTextColor="#999"
                 value={searchText}
                 onChangeText={setSearchText}
+                autoCapitalize="none"
               />
             </View>
           </View>
 
-          {searchText.length === 0 && renderPopularSection()}
-
-          {searchText.length === 0 && (
-            <Text style={styles.sectionTitle}>All countries</Text>
-          )}
-
-          <FlatList
-            data={filteredCountries}
+          <SectionList
+            sections={sections}
             renderItem={renderItem}
+            renderSectionHeader={renderSectionHeader}
             keyExtractor={(item) => `${item.name}-${item.code}`}
+            stickySectionHeadersEnabled={false}
             getItemLayout={(data, index) => ({
               length: 60, // Height of each item
               offset: 60 * index,
@@ -242,15 +257,16 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#333",
   },
-  sectionContainer: {
-    marginBottom: 16,
+  sectionHeaderContainer: {
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
   },
   sectionTitle: {
     fontSize: 16,
     fontWeight: "500",
     color: "#333",
     marginVertical: 8,
-    paddingHorizontal: 16,
   },
   countryItem: {
     flexDirection: "row",
@@ -271,4 +287,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default CountryCodeSelector;
+export default InternationalCodeSelector;
